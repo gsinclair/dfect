@@ -1,6 +1,13 @@
 require 'dfect/inochi'
 
 require 'yaml'
+
+# gsinclair's added requires; incorporate into inochi?
+require 'pp'
+require 'rubygems'
+require 'ruby-debug'
+require 'dev-utils/debug'
+
 #
 # YAML raises this error when we try to serialize a class:
 #
@@ -705,7 +712,7 @@ module Dfect
 
       failed = lambda do
         @stats[:fail] += 1
-        debug block, message
+        _debug block, message
       end
 
       result = block ? call(block) : condition
@@ -747,13 +754,13 @@ module Dfect
 
         if exception
           # debug the uncaught exception...
-          debug_uncaught_exception block, exception
+          _debug_uncaught_exception block, exception
 
           # ...in addition to debugging this assertion
-          debug block, [message, {'block raised' => exception}]
+          _debug block, [message, {'block raised' => exception}]
 
         else
-          debug block, message
+          _debug block, message
         end
       end
 
@@ -792,7 +799,7 @@ module Dfect
 
       failed = lambda do
         @stats[:fail] += 1
-        debug block, message
+        _debug block, message
       end
 
       # if nothing was thrown, the result of catch()
@@ -802,7 +809,7 @@ module Dfect
           block.call
 
         rescue Exception => e
-          debug_uncaught_exception block, e unless
+          _debug_uncaught_exception block, e unless
             # ignore error about the wrong symbol being thrown
             #
             # NOTE: Ruby 1.8 formats the thrown value in `quotes'
@@ -833,6 +840,7 @@ module Dfect
       unless @options[:quiet]
         # stringify symbols in YAML output for better readability
         puts object.to_yaml.gsub(/^([[:blank:]]*(- )?):(?=@?\w+: )/, '\1')
+        debug object.pp_s
       end
     end
 
@@ -892,7 +900,7 @@ module Dfect
         end
 
       rescue Exception => e
-        debug_uncaught_exception block, e
+        _debug_uncaught_exception block, e
 
       ensure
         @calls.pop
@@ -920,7 +928,7 @@ module Dfect
     #   Stack trace corresponding to point of
     #   failure in the code being debugged.
     #
-    def debug context, message = nil, backtrace = caller
+    def _debug context, message = nil, backtrace = caller
       # inherit binding of enclosing test or hook
       context ||= @calls.last
 
@@ -1019,9 +1027,9 @@ module Dfect
     ##
     # Debugs the given uncaught exception inside the given context.
     #
-    def debug_uncaught_exception context, exception
+    def _debug_uncaught_exception context, exception
       @stats[:error] += 1
-      debug context, exception, exception.backtrace
+      _debug context, exception, exception.backtrace
     end
 
     ##
