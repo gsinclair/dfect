@@ -1,13 +1,60 @@
+gsinclair/dfect
+===============
+
 Fork by Gavin Sinclair of Suraj N. Kurapati's 'dfect' testing library.
 
 Things I like about dfect: simplicity, minimalism, good design.
 
-Things I want to implement:
- * Minimal output
- * Colourful output
- * (A few) more assertions, like Eq for asserting equality
- * Facility for user-added assertions
- * Easily select the tests you want to run
+Things I want to implement, with progress reports:
 
-It's experimental and tailored specifically to my taste.  I'm not interested in
-general output that can be plugged into a CI server or whatever.
+ * Minimal but useful output with meaningful failure messages
+     - Completed in many/most cases; see below.
+
+ * Colourful output
+     - Completed in many/most cases.
+
+ * (A few) more assertions, like Eq for asserting equality
+     - The following are implemented (test/unit equivalent in brackets):
+        + Eq (assert_equal)
+        + N  (assert_nil)
+        + Mt (assert_match)
+     - More to come as I need/want them.  Not aiming to add everything
+       under the sun, though!
+
+ * Facility for user-added assertions
+     - No work done on this.
+
+ * Easily select the tests you want to run
+     - No work done on this.
+
+
+Output
+------
+
+Here is a "screenshot" of a test failure in the project I'm working on.
+Unfortunately it doesn't show the colour, which makes it much easier to read.
+See [1] and [2] for true screenshots showing the colour.
+
+    FAIL: TopicDocument (resources)
+        ./test/topic_document.rb
+           53   Eq r[0].category,     "F"
+           54   Eq r[0].filetype,     "PDF"
+        => 55   Eq r[0].file_re,      /^A030.+worksheet/
+           56   Eq r[0].description, %{
+           57     A summary of (nearly?) all the skills taught in this topic.
+      Equality test failed
+        Was: /^A030.+worksheet.pdf/
+        Exp: /^A030.+worksheet/
+      Backtrace
+        ./test/topic_document.rb:55
+        test/_all.rb:19
+
+
+[1] http://picasaweb.google.com/lh/photo/WyrF7D7I4sKnSNCz0RlBJw
+[2] http://picasaweb.google.com/lh/photo/N8kCnZ3U3wFqKBKKJM9Crg
+
+
+Contact
+-------
+
+gsinclair at gmail dot com

@@ -7,6 +7,8 @@ require 'pp'
 require 'rubygems'
 require 'ruby-debug'
 require 'dev-utils/debug'
+require 'term/ansicolor'
+class String; include Term::ANSIColor; end
 
 #
 # YAML raises this error when we try to serialize a class:
@@ -36,7 +38,7 @@ rescue LoadError
 end
 
 module Dfect
-  class << self
+  class << Dfect
     ##
     # Hash of test results, assembled by {Dfect.run}.
     #
@@ -270,6 +272,43 @@ module Dfect
     def T condition = nil, message = nil, &block
       assert_yield :assert, condition, message, &block
     end
+
+    def Eq actual, expected, message = nil
+      assert_equal :assert, actual, expected, message
+    end
+
+    def Eq! actual, expected, message = nil
+      assert_equal :negate, actual, expected, essage
+    end
+
+    def Eq? actual, expected, message = nil
+      assert_equal :sample, actual, expected, message
+    end
+
+    def N condition = nil, message = nil, &block
+      assert_nil :assert, condition, message, &block
+    end
+
+    def N! condition = nil, message = nil, &block
+      assert_nil :negate, condition, message, &block
+    end
+
+    def N? condition = nil, message = nil, &block
+      assert_nil :sample, condition, message, &block
+    end
+
+    def Mt string, regex, message=nil
+      assert_match :assert, string, regex, message
+    end
+
+    def Mt! string, regex, message=nil
+      assert_match :negate, string, regex, message
+    end
+
+    def Mt? string, regex, message=nil
+      assert_match :sample, string, regex, message
+    end
+
 
     ##
     # Asserts that the given condition or the
@@ -661,8 +700,12 @@ module Dfect
         # otherwise, we will be repeating already printed
         # failure details and obstructing the developer!
         #
-        display @trace
+
+        #display @trace    -- boring...
       end
+
+      ### XXX: In this method I can choose what gets displayed and when!
+      ### Run the debugger here to see what values are available to me.
 
       display @stats
     end
@@ -694,28 +737,105 @@ module Dfect
       @suite.tests << Suite::Test.new(description, block, sandbox)
     end
 
-    def assert_yield mode, condition = nil, message = nil, &block
+    ### XXX: My new method for asserting equality, to support Eq etc.
+    def assert_equal mode, actual, expected, message
+      message ||=
+        case mode
+        when :assert
+          str = "Equality test failed\n".yellow.bold
+          str << "  Was: #{actual.inspect}\n".red.bold
+          str << "  Exp: #{expected.inspect}".green.bold
+        when :negate
+          if expected.inspect.length < 10
+            "Inequality test failed: object should not equal #{expected.inspect}.red.bold"
+          else
+            "Inequality test failed: the two objects were equal.\n" <<
+            "  Value: #{expected.inspect.red.bold}"
+          end
+        end
+
+      passed = lambda { @stats[:pass] += 1 }
+      #failed = lambda { @stats[:fail] += 1; _debug nil, message }
+      failed = lambda { @stats[:fail] += 1; report_failure nil, message }
+
+      result = (expected == actual)
+
+      case mode
+      when :sample then return result
+      when :assert then result ? passed.call : failed.call
+      when :negate then result ? failed.call : passed.call
+      end
+
+      result
+    end
+
+    def assert_nil mode, condition = nil, message = nil, &block
       # first parameter is actually the message when block is given
       message = condition if block
 
       message ||= (
         prefix = block ? 'block must yield' : 'condition must be'
         case mode
-        when :assert then "#{prefix} true (!nil && !false)"
-        when :negate then "#{prefix} false (nil || false)"
+        when :assert then "#{prefix} nil"
+        when :negate then "#{prefix} not nil"
         end
       )
 
-      passed = lambda do
-        @stats[:pass] += 1
-      end
-
-      failed = lambda do
-        @stats[:fail] += 1
-        _debug block, message
-      end
+      passed = lambda { @stats[:pass] += 1 }
+      failed = lambda { @stats[:fail] += 1; _debug block, message }
 
       result = block ? call(block) : condition
+      result = result.nil?
+
+      case mode
+      when :sample then return result ? true : false
+      when :assert then result ? passed.call : failed.call
+      when :negate then result ? failed.call : passed.call
+      end
+
+      result
+    end
+
+    def assert_match mode, string, regexp, message = nil
+      raise ArgumentError unless String === string and Regexp === regexp
+      message ||= (
+        _not_ =
+          case mode
+          when :assert then " "
+          when :negate then " NOT "
+          end
+        "Match failure: string should#{_not_}match regex\n".yellow.bold <<
+        "  String: #{string.inspect.truncate(200).red.bold}\n" <<
+        "  Regexp: #{regexp.inspect.green.bold}"
+      )
+
+      passed = lambda { @stats[:pass] += 1 }
+      failed = lambda { @stats[:fail] += 1; report_failure nil, message }
+
+      result = (string =~ regexp)
+
+      case mode
+      when :sample then return result ? true : false
+      when :assert then result ? passed.call : failed.call
+      when :negate then result ? failed.call : passed.call
+      end
+
+      result
+    end
+
+    def assert_yield mode, condition = nil, message = nil, &block
+      # first parameter is actually the message when block is given
+      message = condition if block
+
+      message ||= "Assertion failed".yellow.bold
+
+      passed = lambda { @stats[:pass] += 1 }
+      failed = lambda { @stats[:fail] += 1; report_failure block, message }
+
+      result = block ? call(block) : condition
+
+      ### XXX: In this method I can emit results to STDOUT as they happen,
+      ### rather than wait until the end.
 
       case mode
       when :sample then return result ? true : false
@@ -762,6 +882,9 @@ module Dfect
         else
           _debug block, message
         end
+
+        ### XXX: In this block, I can emit stuff to STDOUT when an exception is
+        ### raised, or something.
       end
 
       begin
@@ -793,14 +916,8 @@ module Dfect
       symbol = symbol.to_sym
       message ||= "block must throw #{symbol.inspect}"
 
-      passed = lambda do
-        @stats[:pass] += 1
-      end
-
-      failed = lambda do
-        @stats[:fail] += 1
-        _debug block, message
-      end
+      passed = lambda { @stats[:pass] += 1 }
+      failed = lambda { @stats[:fail] += 1; _debug block, message }
 
       # if nothing was thrown, the result of catch()
       # is simply the result of executing the block
@@ -840,7 +957,6 @@ module Dfect
       unless @options[:quiet]
         # stringify symbols in YAML output for better readability
         puts object.to_yaml.gsub(/^([[:blank:]]*(- )?):(?=@?\w+: )/, '\1')
-        debug object.pp_s
       end
     end
 
@@ -854,6 +970,7 @@ module Dfect
       suite.before_all.each {|b| call b }
 
       suite.tests.each do |test|
+
         suite.before_each.each {|b| call b }
 
         @tests.push test
@@ -888,10 +1005,62 @@ module Dfect
     ##
     # Invokes the given block and debugs any
     # exceptions that may arise as a result.
+    # XXX: This is where tests actually get run.
     #
     def call block, sandbox = nil
       begin
         @calls.push block
+
+        ### XXX: This is the bit where tests actually get run.
+        #
+        # Example code:
+        #   D "A new array" do
+        #     D .< { @array = [] }
+        #
+        #     D "must be empty" do
+        #       T { @array.empty? }
+        #     end
+        #
+        #     D "when populated" do
+        #       D .< { @array.push 55 }
+        #
+        #       D "must not be empty" do
+        #         F { @array.empty? }
+        #       end
+        #     end
+        #   end
+        #
+        # A test isn't a method like in test/unit; it's a block of code that may
+        # contain assertions (T/F/Eq/...) and nested blocks.
+        #
+        # I think I would like to flatten the test/block structure, but that may
+        # not be feasible or even desirable.
+        #
+        # I don't think I can exercise much control here; it's when an actual
+        # assertion gets called that I can output stuff like:
+        #
+        #   A new array:
+        #    - must be empty                  PASS
+        #    - when populated:
+        #      - must not be empty            PASS
+        #
+        # But is that really what I want to do?  This style encourages lots of
+        # small tests, whereas I prefer fewer, larger ones with lots of
+        # assertions.  I might rewrite the above as
+        #
+        #   D "Array basics" do
+        #     array = []
+        #     T { array.empty? }
+        #     array.push 55
+        #     F { array.empty? }
+        #   end
+        #
+        # I'm not sure I care for nested contexts at all, and they make it much
+        # more complicated (I think), and maybe I'd be better off starting my
+        # own thing from scratch.
+        #       
+
+        debug "Description: #{@tests.last.desc}"
 
         if sandbox
           sandbox.instance_eval(&block)
@@ -900,7 +1069,9 @@ module Dfect
         end
 
       rescue Exception => e
-        _debug_uncaught_exception block, e
+        debug "Uncaught exception: #{e}"
+        report_uncaught_exception block, e
+        #_debug_uncaught_exception block, e
 
       ensure
         @calls.pop
@@ -927,6 +1098,10 @@ module Dfect
     #
     #   Stack trace corresponding to point of
     #   failure in the code being debugged.
+    #
+    # XXX: I'll need to come to grips with this method, for doing things like
+    # extracting code and filtering the backtrace, but I'll want to simplify it
+    # somewhat: farm some of the detail out to another class or something.
     #
     def _debug context, message = nil, backtrace = caller
       # inherit binding of enclosing test or hook
@@ -976,15 +1151,22 @@ module Dfect
         # variable values
         :vars => if context
           names = eval('::Kernel.local_variables + self.instance_variables', context, __FILE__, __LINE__)
+            # XXX: ^^^ Here is the place to edit if I want to prevent certain
+            #          variables from being printed (e.g. ignore _abc)
 
-          pairs = names.inject([]) do |pair, name|
+#         pairs = names.inject([]) do |pair, name|
+#           variable = name.to_s
+#           value    = eval(variable, context, __FILE__, __LINE__)
+#
+#           pair.push variable.to_sym, value
+#         end
+#         Hash[*pairs]
+
+          names.build_hash { |name|
             variable = name.to_s
             value    = eval(variable, context, __FILE__, __LINE__)
-
-            pair.push variable.to_sym, value
-          end
-
-          Hash[*pairs]
+            [variable, value]
+          }
         end,
 
         # stack trace
@@ -1022,7 +1204,119 @@ module Dfect
       end
 
       nil
+    end  # _debug
+
+    ### XXX: My new method for reporting a failure.
+    def report_failure context, message = nil, backtrace = caller
+      context ||= @calls.last
+      if context and context.respond_to? :binding
+        context = context.binding
+      end
+      debug "FAIL"
+      debug "Before: #{backtrace.inspect}"
+      backtrace = backtrace.reject {|s| s.include? INTERNALS }
+      debug "After: #{backtrace.inspect}"
+
+      if frame = backtrace.first
+        file, line = frame.scan(/(.+?):(\d+(?=:|\z))/).first
+        line = line.to_i
+      end
+
+      name_of_test = @tests.map { |t| t.desc }.join(' ')
+      puts "FAIL".red.bold + ": " + name_of_test.white.bold
+      puts code(file, line).indent(4) if file
+      puts message.indent(2)
+      puts "  Backtrace\n" + backtrace.join("\n").indent(4)
+      if vars = variables(context)
+        puts "  Variables\n" + vars.indent(4)
+      end
     end
+
+    def report_uncaught_exception context, exception
+      context ||= @calls.last
+      if context and context.respond_to? :binding
+        context = context.binding
+      end
+      backtrace = exception.backtrace
+      debug "ERROR"
+      debug "Before:\n#{backtrace.pp_s}"
+      backtrace = backtrace.reject {|s| s.include? INTERNALS }
+      debug "After:\n#{backtrace.pp_s}"
+
+      if frame = backtrace.first
+        file, line = frame.scan(/(.+?):(\d+(?=:|\z))/).first
+        line = line.to_i
+      end
+
+      name_of_test = @tests.map { |t| t.desc }.join(' ')
+      puts "ERROR".red.bold + ": " + name_of_test.white.bold
+      puts code(file, line).indent(4) if file
+      puts "  Message: #{exception.message.yellow.bold}"
+      puts "  Backtrace\n" + backtrace.join("\n").indent(4)
+      if vars = variables(context)
+        puts "  Variables\n" + vars.indent(4)
+      end
+    end
+
+    def code(file, line)
+      if source = @files[file]
+        line = line.to_i
+        radius = 2 # number of surrounding lines to show
+        region1 = [line - radius, 1].max .. [line - 1, 1].max
+        region2 = [line]
+        region3 = [line + 1, source.length].min .. [line + radius, source.length].min
+
+        # ensure proper alignment by zero-padding line numbers
+        format = "%2s %0#{region3.last.to_s.length}d %s"
+
+        pretty1 = region1.map { |n|
+          format % [nil, n, source[n-1].chomp]
+        }
+        pretty2 = region2.map  { |n|
+          (format % ['=>', n, source[n-1].chomp]).yellow.bold
+        }
+        pretty3 = region3.map { |n|
+          format % [nil, n, source[n-1].chomp]
+        }
+        pretty = pretty1 + pretty2 + pretty3
+
+        #pretty.unshift "[#{region.inspect}] in #{file}"
+        pretty.unshift file
+
+        # to_yaml will render the paragraph without escaping newlines
+        # ONLY IF the first and last character are non-whitespace
+        pretty.join("\n").strip
+
+        # XXX: But I don't care about YAML, so...
+        pretty.join("\n")
+      end
+    end
+
+    def variables(context)
+      if context
+        names = eval('::Kernel.local_variables + self.instance_variables',
+                     context, __FILE__, __LINE__)
+        #names = names.grep /^[a-z]/    # Ignore vars starting with underscores.
+        return nil if names.empty?
+        pairs = names.map { |name|
+          variable = name.to_s
+          value    = eval(variable, context, __FILE__, __LINE__)
+          "#{variable}: #{value.inspect.truncate(40)}"
+        }.join("\n")
+      end
+    end
+
+    class ::String
+      def truncate(n)
+        str = self
+        if str.length > n
+          str[0...n] + "..."
+        else
+          str
+        end
+      end
+    end
+
 
     ##
     # Debugs the given uncaught exception inside the given context.
@@ -1067,7 +1361,7 @@ module Dfect
 
       Test = Struct.new(:desc, :block, :sandbox) # @private
     end
-  end
+  end  # class << Dfect
 
   @options = {:debug => $DEBUG, :quiet => false}
 
@@ -1093,11 +1387,18 @@ module Dfect
   D = self
 
   # provide mixin-able assertion methods
-  methods(false).grep(/^[[:upper:]]?[[:punct:]]*$/).each do |name|
+  methods(false).grep(/^(x?[A-Z][a-z]?)?[<>!?]*$/).each do |name|
     #
     # XXX: using eval() on a string because Ruby 1.8's
     #      define_method() cannot take a block parameter
     #
-    module_eval "def #{name}(*a, &b) ::#{self.name}.#{name}(*a, &b) end", __FILE__, __LINE__
+    module_eval "def #{name}(*a, &b) ::#{self.name}.#{name}(*a, &b) end",
+      __FILE__, __LINE__
+    unless name =~ /[<>]/
+      # Also define 'x' method that is a no-op; e.g. xD, xT, ...
+      module_eval "def x#{name}(*a, &b) :no_op end", __FILE__, __LINE__
+      module_eval "def Dfect.x#{name}(*a, &b) :no_op end", __FILE__, __LINE__
+    end
   end
-end
+
+end  # module Dfect
