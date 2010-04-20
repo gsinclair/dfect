@@ -707,7 +707,35 @@ module Dfect
       ### XXX: In this method I can choose what gets displayed and when!
       ### Run the debugger here to see what values are available to me.
 
-      display @stats
+      # display @stats    -- boring...
+
+      # Here we display the results (#pass, #fail, #error, #run) and an overall
+      # pass/fail/error.
+      npass   = @stats[:pass]  || 0
+      nfail   = @stats[:fail]  || 0
+      nerror  = @stats[:error] || 0
+      overall = (nfail + nerror > 0) ? :FAIL : :PASS
+      ntotal  = npass + nfail + nerror
+      time    = @stats[:time]
+
+      overall_colour = (if overall == :PASS then :green else :red end)
+      npass_colour   = :green
+      nfail_colour   = (if nfail  > 0 then :red else :green end)
+      nerror_colour  = (if nerror > 0 then :red else :green end)
+      time_colour    = :white
+
+      overall_str   = overall.to_s.ljust(10).send(overall_colour).bold
+      npass_str     = (sprintf "#pass: %-6d",  npass).send(npass_colour).bold
+      nfail_str     = (sprintf "#fail: %-6d",  nfail).send(nfail_colour).bold
+      nerror_str    = (sprintf "#error: %-6d", nerror).send(nerror_colour).bold
+      time_str      = (sprintf "time: %s",      time).send(time_colour)
+
+      equals = ("=" * 80).send(overall_colour).bold + "\n"
+      string = equals.dup
+      string << overall_str << npass_str << nfail_str << nerror_str << time_str << "\n"
+      string << equals
+
+      puts string
     end
 
     ##
@@ -1233,6 +1261,7 @@ module Dfect
     end
 
     def report_uncaught_exception context, exception
+      @stats[:error] += 1
       context ||= @calls.last
       if context and context.respond_to? :binding
         context = context.binding
