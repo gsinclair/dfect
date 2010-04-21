@@ -1089,6 +1089,7 @@ module Dfect
         #       
 
         debug "Description: #{@tests.last.desc}"
+        $dfect_test = @tests.last.desc
 
         if sandbox
           sandbox.instance_eval(&block)
