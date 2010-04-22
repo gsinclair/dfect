@@ -797,14 +797,16 @@ module Dfect
       message ||=
         case mode
         when :assert
-          str = "Equality test failed\n".yellow.bold
-          str << "  Was: #{actual.inspect}\n".red.bold
-          str << "  Exp: #{expected.inspect}".green.bold
-          if String === actual and String === expected \
-               and expected.length > 40 and actual.length > 40
-            diff = Differ.diff_by_char(actual.inspect, expected.inspect)
-            str << NL << "  Dif: #{diff}"
-          end
+          String.new.tap { |str|
+            str << "Equality test failed\n".yellow.bold
+            str << "  Was: #{actual.inspect}\n".red.bold
+            str << "  Exp: #{expected.inspect}".green.bold
+            if String === actual and String === expected \
+                 and expected.length > 40 and actual.length > 40
+              diff = Differ.diff_by_char(actual.inspect, expected.inspect)
+              str << NL << "  Dif: #{diff}"
+            end
+          }
         when :negate
           if expected.inspect.length < 10
             "Inequality test failed: object should not equal #{expected.inspect}.red.bold"
@@ -1274,9 +1276,9 @@ module Dfect
         context = context.binding
       end
       debug "FAIL"
-      debug "Before: #{backtrace.inspect}"
+      debug "Before: #{backtrace.to_yaml}"
       backtrace = backtrace.reject {|s| s.include? INTERNALS }
-      debug "After: #{backtrace.inspect}"
+      debug "After: #{backtrace.to_yaml}"
 
       if frame = backtrace.first
         file, line = frame.scan(/(.+?):(\d+(?=:|\z))/).first
@@ -1286,7 +1288,12 @@ module Dfect
       name_of_test = @tests.map { |t| t.desc }.join(' ')
       puts "FAIL".red.bold + ": " + name_of_test.white.bold
       puts code(file, line).indent(4) if file
-      puts message.indent(2)
+      if message
+        puts message.indent(2)
+      else
+        puts "No message! #{__FILE__}:#{__LINE__}"
+        puts "See full backtrace in debug.log"
+      end
       puts "  Backtrace\n" + backtrace.join("\n").indent(4)
       if vars = variables(context)
         puts "  Variables\n" + vars.indent(4)
