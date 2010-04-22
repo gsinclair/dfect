@@ -9,6 +9,33 @@ require 'ruby-debug'
 require 'dev-utils/debug'
 require 'term/ansicolor'
 class String; include Term::ANSIColor; end
+gem 'differ'
+require 'differ'
+
+module BoldColor
+  class << self
+    def format(change)
+      (change.change? && as_change(change)) ||
+        (change.delete? && as_delete(change)) ||
+        (change.insert? && as_insert(change)) ||
+        ''
+    end
+
+    private
+    def as_insert(change)
+      change.insert.green.bold
+    end
+
+    def as_delete(change)
+      change.delete.red.bold
+    end
+
+    def as_change(change)
+      as_delete(change) << as_insert(change)
+    end
+  end
+end
+Differ.format = BoldColor
 
 #
 # YAML raises this error when we try to serialize a class:
@@ -773,6 +800,11 @@ module Dfect
           str = "Equality test failed\n".yellow.bold
           str << "  Was: #{actual.inspect}\n".red.bold
           str << "  Exp: #{expected.inspect}".green.bold
+          if String === actual and String === expected \
+               and expected.length > 40 and actual.length > 40
+            diff = Differ.diff_by_char(actual.inspect, expected.inspect)
+            str << NL << "  Dif: #{diff}"
+          end
         when :negate
           if expected.inspect.length < 10
             "Inequality test failed: object should not equal #{expected.inspect}.red.bold"
