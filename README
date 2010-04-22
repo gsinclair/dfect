@@ -41,7 +41,7 @@ Output
 
 Here is a "screenshot" of a test failure in the project I'm working on.
 Unfortunately it doesn't show the colour, which makes it much easier to read.
-See [1] and [2] for true screenshots showing the colour.
+See links [1]-[3] below for true screenshots showing the colour.
 
     FAIL: TopicDocument (resources)
         ./test/topic_document.rb
@@ -60,6 +60,7 @@ See [1] and [2] for true screenshots showing the colour.
 
 [1] http://picasaweb.google.com/lh/photo/WyrF7D7I4sKnSNCz0RlBJw
 [2] http://picasaweb.google.com/lh/photo/N8kCnZ3U3wFqKBKKJM9Crg
+[3] http://picasaweb.google.com/lh/photo/7r2o1HWCjyEOhjc7o1nluQ
 
 
 Contact
