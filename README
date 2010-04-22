@@ -8,10 +8,12 @@ Things I like about dfect: simplicity, minimalism, good design.
 Things I want to implement, with progress reports:
 
  * Minimal but useful output with meaningful failure messages
-     - Completed in many/most cases; see below.
+     - Completed in most/all cases; see below.
+     - When asserting equality between two long strings, the _difference_
+       between them is indicated for easier debugging.
 
  * Colourful output
-     - Completed in many/most cases.
+     - Completed in most/all cases.
 
  * (A few) more assertions, like Eq for asserting equality
      - The following are implemented (test/unit equivalent in brackets):
@@ -26,6 +28,12 @@ Things I want to implement, with progress reports:
 
  * Easily select the tests you want to run
      - No work done on this.
+
+ * Easily run the debugger when certain tests are executing
+     - The global variable $dfect_test is set to the description of the
+       currently-running test, meaning you can insert a line into your
+       code like this:
+          debugger if $dfect_test =~ /generate HTML/
 
 
 Output
